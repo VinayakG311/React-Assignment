@@ -14,6 +14,7 @@ export default function Home() {
   const [dataa, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  //Fetch data from the url and store it in dataa
   useEffect(() => {
 
     fetch(`https://ckan.indiadataportal.com/api/3/action/datastore_search?limit=100000&resource_id=c0f168be-3532-4d08-b908-473ded89bd8b`)
@@ -32,21 +33,22 @@ export default function Home() {
         setLoading(false);
       });
   }, []);
+  //fetch the records field from the data
   const records = dataa != null ? dataa['result']['records'] : null;
-  // console.log(records)
+  // store the required data from the records
   const mapper = records != null ? (records as any).map((item: {
     holding_area: any;
     district_name: any; state_name: any, social_group: any, holding_num: any;
   }) => [item.state_name, item.social_group, item.holding_num, item.holding_area, item.district_name]) : null;
-
+  // states for which data is to be considered
   const validStateNames = ["Uttar Pradesh", "Madhya Pradesh", "Punjab", 'Andhra Pradesh', "Telangana"];
   const mappedData = mapper != null ? mapper.filter((item: [state_name: string]) => validStateNames.includes(item[0])) : null;
-
+  
   const groupedDataArray: {
     holding_area: any;
     district_name: any; stateName: any; social_group: any[]; holding_num: any[];
   }[] = [];
-
+  //store data for every state separately
   if (mappedData != null) {
     mappedData.forEach(([stateName, socialGroup, holdingNum, holdingArea, districtName]: any) => {
       // Check if an entry for the state already exists in groupedDataArray
@@ -70,6 +72,7 @@ export default function Home() {
       }
     });
   }
+  //store the data to be plotted in grouped bar graph
   const d: any[] = [];
   if (groupedDataArray != null) {
     groupedDataArray.forEach((item) => {
@@ -83,9 +86,8 @@ export default function Home() {
     })
   }
   const [geojsonData, setGeojsonData] = useState(null);
-
+  // fetch geojson from local publics folder
   useEffect(() => {
-    // Load your GeoJSON data here
     fetch('india_states.geojson')
       .then((response) => response.json())
       .then((data) => setGeojsonData(data))
@@ -93,6 +95,7 @@ export default function Home() {
   }, []);
 
   var cd: any = [];
+  //store data to plot into chloropeth graph
   if (groupedDataArray != null) {
     var l: string[] = [];
     var z: number[] = [];
@@ -118,19 +121,10 @@ export default function Home() {
       colorbar: { title: 'Holding Area' },
     }
     ];
-    // groupedDataArray.forEach((item) => {
-    //   const trace: any = {
-    //     type: 'choropleth',
-    //     locations: item.district_name,
-    //     z: item.holding_area,
-    //     geojson: geojsonData
 
-    //   }
-    //   cd.push(trace);
-    // })
   }
   console.log(cd)
-  // console.log(d);
+
   return dataa == null ?
     <main>
       "loading data"

@@ -1,113 +1,150 @@
-import Image from 'next/image'
+'use client'
+
+
+import Plot from "react-plotly.js";
+
+
+import { useEffect, useState } from "react";
+
+
+
+
 
 export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
+  const [dataa, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  useEffect(() => {
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
+    fetch(`https://ckan.indiadataportal.com/api/3/action/datastore_search?limit=100000&resource_id=c0f168be-3532-4d08-b908-473ded89bd8b`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Network response was not ok: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then((result) => {
+        setData(result);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err);
+        setLoading(false);
+      });
+  }, []);
+  const records = dataa != null ? dataa['result']['records'] : null;
+  // console.log(records)
+  const mapper = records != null ? (records as any).map((item: {
+    holding_area: any;
+    district_name: any; state_name: any, social_group: any, holding_num: any;
+  }) => [item.state_name, item.social_group, item.holding_num, item.holding_area, item.district_name]) : null;
+
+  const validStateNames = ["Uttar Pradesh", "Madhya Pradesh", "Punjab", 'Andhra Pradesh', "Telangana"];
+  const mappedData = mapper != null ? mapper.filter((item: [state_name: string]) => validStateNames.includes(item[0])) : null;
+
+  const groupedDataArray: {
+    holding_area: any;
+    district_name: any; stateName: any; social_group: any[]; holding_num: any[];
+  }[] = [];
+
+  if (mappedData != null) {
+    mappedData.forEach(([stateName, socialGroup, holdingNum, holdingArea, districtName]: any) => {
+      // Check if an entry for the state already exists in groupedDataArray
+      const existingEntry = groupedDataArray.find(entry => entry.stateName === stateName);
+
+      if (existingEntry) {
+        // If the state entry exists, add the new data to it
+        existingEntry.social_group.push(socialGroup);
+        existingEntry.holding_num.push(holdingNum);
+        existingEntry.holding_area.push(holdingArea);
+        existingEntry.district_name.push(districtName);
+      } else {
+        // If the state entry doesn't exist, create a new entry
+        groupedDataArray.push({
+          stateName,
+          social_group: [socialGroup],
+          holding_num: [holdingNum],
+          holding_area: [holdingArea],
+          district_name: [districtName]
+        });
+      }
+    });
+  }
+  const d: any[] = [];
+  if (groupedDataArray != null) {
+    groupedDataArray.forEach((item) => {
+      const trace: any = {
+        x: item.social_group,
+        y: item.holding_num,
+        name: item.stateName,
+        type: 'bar'
+      };
+      d.push(trace);
+    })
+  }
+  const [geojsonData, setGeojsonData] = useState(null);
+
+  useEffect(() => {
+    // Load your GeoJSON data here
+    fetch('india_states.geojson')
+      .then((response) => response.json())
+      .then((data) => setGeojsonData(data))
+      .catch((error) => console.error('Error loading GeoJSON data: ', error));
+  }, []);
+
+  var cd: any = [];
+  if (groupedDataArray != null) {
+    var l: string[] = [];
+    var z: number[] = [];
+
+    groupedDataArray.forEach((item) => {
+
+      item.district_name.forEach((element: any) => {
+        l.push(element)
+      });
+      item.holding_area.forEach((element: any) => {
+        z.push(element)
+      })
+
+    })
+    cd = [{
+      type: 'choropleth',
+      locations: l, // District names
+      z: z, // Holding areas
+
+      geojson: geojsonData,
+
+      colorscale: 'Viridis',
+      colorbar: { title: 'Holding Area' },
+    }
+    ];
+    // groupedDataArray.forEach((item) => {
+    //   const trace: any = {
+    //     type: 'choropleth',
+    //     locations: item.district_name,
+    //     z: item.holding_area,
+    //     geojson: geojsonData
+
+    //   }
+    //   cd.push(trace);
+    // })
+  }
+  console.log(cd)
+  // console.log(d);
+  return dataa == null ?
+    <main>
+      "loading data"
+    </main> : (
+      <main>
+        <h1>Hello</h1>
+        <Plot
+          data={d}
+          layout={{ barmode: 'group', xaxis: { title: 'Social Group' }, yaxis: { title: 'Holding num' }, title: 'Grouped Bar Chart for 5 States' }}
         />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore the Next.js 13 playground.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  )
+        <Plot
+          data={cd}
+          layout={{ title: 'Chloropeth Map', geo: { projection: { type: 'robinson' } } }}
+        />
+      </main>
+    );
 }
